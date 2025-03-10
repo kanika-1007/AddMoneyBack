@@ -1,17 +1,31 @@
 const express = require("express");
 const cors = require("cors");
-const { initializeApp, applicationDefault } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const admin = require("firebase-admin");
 
 // Initialize Firebase Admin SDK
-initializeApp({
-    credential: applicationDefault(),
+admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
 });
-const db = getFirestore();
+const db = admin.firestore();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Middleware for validating add-money request payload
+const validateAddMoneyRequest = (req, res, next) => {
+    const { userId, amount, utr } = req.body;
+    if (!userId || typeof userId !== "string") {
+        return res.status(400).json({ error: "Invalid or missing userId" });
+    }
+    if (!amount || typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({ error: "Invalid or missing amount" });
+    }
+    if (!utr || typeof utr !== "string") {
+        return res.status(400).json({ error: "Invalid or missing UTR" });
+    }
+    next();
+};
 
 // Get balance
 app.get("/api/add-money/balance/:userId", async (req, res) => {
@@ -23,39 +37,41 @@ app.get("/api/add-money/balance/:userId", async (req, res) => {
         }
         res.json({ balance: userDoc.data().balance || 0 });
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error fetching balance");
+        console.error("Error fetching balance:", err);
+        res.status(500).json({ error: "Error fetching balance" });
     }
 });
 
 // Submit add money request
-app.post("/api/add-money/request", async (req, res) => {
+app.post("/api/add-money/request", validateAddMoneyRequest, async (req, res) => {
     const { userId, amount, utr } = req.body;
 
     try {
+        // Store request in DB
         await db.collection("add_money_requests").add({
             userId,
             amount,
             utr,
             status: "Pending",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
         res.json({ message: "Request submitted successfully" });
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error submitting request");
+        console.error("Error submitting request:", err);
+        res.status(500).json({ error: "Error submitting request" });
     }
 });
 
-// Fetch all requests
+// Fetch all requests (Secure this endpoint in production)
 app.get("/api/add-money/requests/all", async (req, res) => {
     try {
-        const snapshot = await db.collection("add_money_requests").get();
+        const snapshot = await db.collection("add_money_requests").orderBy("createdAt", "desc").get();
         const requests = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
         res.json(requests);
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error fetching requests");
+        console.error("Error fetching requests:", err);
+        res.status(500).json({ error: "Error fetching requests" });
     }
 });
 
