@@ -1,21 +1,12 @@
 const express = require("express");
 const cors = require("cors");
 const { initializeApp, applicationDefault } = require("firebase-admin/app");
-const admin = require("firebase-admin");
+const { getFirestore } = require("firebase-admin/firestore");
 
-// Initialize Firebase Admin
-admin.initializeApp({
-    credential: admin.credential.cert(require("./serviceAccountKey.json"))
+// Initialize Firebase Admin SDK
+initializeApp({
+    credential: applicationDefault(),
 });
-
-// Generate a custom token
-admin.auth().createCustomToken("your-user-id")
-    .then(token => {
-        console.log("✅ Custom Token:", token);
-    })
-    .catch(error => {
-        console.error("❌ Error generating token:", error);
-    });
 const db = getFirestore();
 
 const app = express();
